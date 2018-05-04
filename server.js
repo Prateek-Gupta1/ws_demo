@@ -2,8 +2,12 @@ const WebSocket = require('ws');
 const packageData = require('./package.json');
 const readline = require('readline');
 const ip = require('ip');
+const BlockChain = require('./BlockChain.js');
+const Block = require('./Block.js');
 
+const blockChain = new BlockChain(packageData.difficulty);
 const serverIp = ip.address();
+let isMining = false;
 
 const lineInterface = readline.createInterface({
 	input: process.stdin,
@@ -24,11 +28,11 @@ const broadcast = (data) => {
 };
 
 lineInterface.on('line', (line) => {
-	broadcast(JSON.stringify({
-		data: line,
-		command: 'MESSAGE',
-		ip: serverIp,
-	}));
+    const messageString = `${serverIp} sent :  ${line}`;
+    const block = new Block(messageString, blockChain.getLastHash());
+    console.log(block);
+    isMining = true;
+    broadcast(JSON.stringify(block));
 });	
 
 server.on('connection', (ws) => {
@@ -38,13 +42,15 @@ server.on('connection', (ws) => {
 			case 'OPEN':
 				console.log(`${messageData.ip} has connected`);
 				break;
-			case 'MESSAGE':
-				console.log(`${messageData.ip} sent :  ${messageData.data}`);
-				server.clients.forEach((client) => {
-					if (client !== ws && client.readyState === WebSocket.OPEN) {
-						client.send(message);
-					}
-				});
+			case 'MINE_COMPLETE':
+				// test block
+                if (isMining) {
+                    const block = Block.loadBlock(messageData.block);
+                    console.log(`${messageData.ip} wins`);
+                    blockChain.addBlock(block);
+                    console.log(blockChain);
+                    isMining = false;
+                }
 				break;
 			default:
 			console.log('unknown command');
